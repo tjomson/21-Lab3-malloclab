@@ -50,12 +50,14 @@ team_t team = {
 
 #define COLOR(i)   (i | 1)
 
+void *heaplo;
+
 /* 
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
 {
-    mem_init();
+    heaplo = mem_heap_lo();
     return 0;
 }
 
@@ -66,10 +68,8 @@ int mm_init(void)
 void *mm_malloc(size_t size)
 {
     int newsize = ALIGN(size + SIZE_T_SIZE + SIZE_T_SIZE); // the bytes for payload-size and SIZE_T_SIZE for the header and footer, aligned to 8 bytes
-    void *current = mem_heap_lo();
+    void *current = heaplo;
     void *max = mem_heap_hi();
-
-    // printf("start: %p\n", current);
 
     while (current < max) {
         size_t header = *(size_t *) current;
@@ -137,8 +137,7 @@ void mm_free(void *ptr)
     int coalesce_next = !ISCOLORED(*(size_t *) next_header) && (footer + SIZE_T_SIZE) < mem_heap_hi();
 
     void *prev_header = header - dereference(prev_footer);
-    void *next_footer = prev_footer + dereference(next_header);
-    // printf("prev: %d, next: %d\n", coalesce_prev, coalesce_next);
+    void *next_footer = next_header + dereference(next_header) - SIZE_T_SIZE;
     if (coalesce_prev && coalesce_next) {
         *(size_t *) prev_header = dereference(prev_footer) + dereference(header) + dereference(next_header);
         *(size_t *) next_footer = dereference(prev_header);
