@@ -41,46 +41,41 @@ team_t team = {
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
-
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
+// Returns whether the block is occupied or not
 #define ISCOLORED(i)  (i & 1)
 
+// Marks the block as free
 #define DECOLOR(i)   (i & ~1)
 
+// Marks the block as occupied
 #define COLOR(i)   (i | 1)
 
-void *heaplo;
+// Returns the value at a given address. Also decolors.
+#define dereference(ptr)  DECOLOR(*(size_t *) ptr)
 
 /* 
  * mm_init - initialize the malloc package.
+ * not used in my implementation
  */
 int mm_init(void)
 {
-    heaplo = mem_heap_lo();
     return 0;
 }
 
-/* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
- */
-void *mm_malloc(size_t size)
-{
+// Implicit free list implementation
+void *mm_malloc(size_t size) {
     int newsize = ALIGN(size + SIZE_T_SIZE + SIZE_T_SIZE); // the bytes for payload-size and SIZE_T_SIZE for the header and footer, aligned to 8 bytes
-    void *current = heaplo;
+    void *current = mem_heap_lo();
     void *max = mem_heap_hi();
 
     while (current < max) {
         size_t header = *(size_t *) current;
-        // printf("check header %lx\n", header);
         if (header == 0) break;
-        // printf("current new addr: %p\n", current);
         if (!ISCOLORED(header) && newsize <= DECOLOR(header)) {
-            // printf("found\n");
             void *footer_ptr = current + header - SIZE_T_SIZE;
             if (newsize + (3 * SIZE_T_SIZE) > header) { // if there is not enough free space to also fit a free block
-                // printf("no room for free block\n");
                 *(size_t *) current = COLOR(header);
                 *(size_t *) footer_ptr = COLOR(header);
             } else {
@@ -94,13 +89,10 @@ void *mm_malloc(size_t size)
                 *(size_t *) footer_ptr = DECOLOR(other_block_size);
                 *(size_t *) other_header_ptr = DECOLOR(other_block_size);
             }
-            // printf("return addr: %p\n", current + SIZE_T_SIZE);
             return current + SIZE_T_SIZE;
         }
         current += DECOLOR(header);
     }
-
-    // printf("expand heap\n");
 
     void *newptr = mem_sbrk(newsize);
     if (newptr == (void *)-1) {
@@ -114,19 +106,10 @@ void *mm_malloc(size_t size)
 
     void *ptr_to_return = newptr + SIZE_T_SIZE; // payload starts after the header
     return ptr_to_return;
-    
-    
 }
 
-size_t dereference(void *ptr) {
-    return DECOLOR(*(size_t *) ptr);
-}
-
-/*
- * mm_free - Freeing a block does nothing.
- */
-void mm_free(void *ptr)
-{
+// Able to coalesce with previous and/or next block
+void mm_free(void *ptr) {
     void *header = ptr - SIZE_T_SIZE;
     void *footer = header + dereference(header) - SIZE_T_SIZE;
 
